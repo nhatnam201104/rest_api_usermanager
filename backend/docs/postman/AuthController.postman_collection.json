@@ -1,0 +1,943 @@
+{
+  "info": {
+    "_postman_id": "3e74b8af-50ea-4c3a-8d31-2e2c0c287f57",
+    "name": "SocialManagement - AuthController Tests",
+    "description": "Postman collection for AuthController. Run with Collection Runner from top to bottom. The first register request creates unique collection variables, saves the returned OTP, then later requests verify OTP, login, and cover auth/validation failures. App default base URL: http://localhost:8081.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (!pm.collectionVariables.get('baseUrl')) {",
+          "  pm.collectionVariables.set('baseUrl', 'http://localhost:8081');",
+          "}",
+          "if (!pm.collectionVariables.get('fullName')) {",
+          "  pm.collectionVariables.set('fullName', 'Postman Auth Tester');",
+          "}",
+          "if (!pm.collectionVariables.get('password')) {",
+          "  pm.collectionVariables.set('password', 'Password123');",
+          "}",
+          "if (!pm.collectionVariables.get('role')) {",
+          "  pm.collectionVariables.set('role', 'USER');",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "01 Register - Success",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const stamp = `${Date.now()}${Math.floor(Math.random() * 1000)}`;",
+              "const phoneSuffix = String(Date.now()).slice(-7).padStart(7, '0');",
+              "pm.collectionVariables.set('userEmail', `auth.postman.${stamp}@example.com`);",
+              "pm.collectionVariables.set('userPhone', `039${phoneSuffix}`);",
+              "pm.collectionVariables.unset('otp');",
+              "pm.collectionVariables.unset('accessToken');",
+              "pm.collectionVariables.unset('refreshToken');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const json = pm.response.json();",
+              "",
+              "pm.test('HTTP 201 Created', function () {",
+              "  pm.response.to.have.status(201);",
+              "});",
+              "",
+              "pm.test('ApiResponse success shape', function () {",
+              "  pm.expect(json.success).to.eql(true);",
+              "  pm.expect(json.statusCode).to.eql(201);",
+              "  pm.expect(json.message).to.be.a('string').and.not.empty;",
+              "});",
+              "",
+              "pm.test('OTP returned and saved', function () {",
+              "  pm.expect(json.data).to.match(/^\\d{6}$/);",
+              "  pm.collectionVariables.set('otp', json.data);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"phone\": \"{{userPhone}}\",\n  \"email\": \"{{userEmail}}\",\n  \"fullName\": \"{{fullName}}\",\n  \"password\": \"{{password}}\",\n  \"role\": \"{{role}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/register",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "register"
+          ]
+        },
+        "description": "Creates a pending user, sends OTP email, and returns OTP in data for test automation."
+      },
+      "response": []
+    },
+    {
+      "name": "02 Verify OTP - Success",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const json = pm.response.json();",
+              "",
+              "pm.test('HTTP 201 Created', function () {",
+              "  pm.response.to.have.status(201);",
+              "});",
+              "",
+              "pm.test('Registration response includes tokens and user', function () {",
+              "  pm.expect(json.success).to.eql(true);",
+              "  pm.expect(json.statusCode).to.eql(201);",
+              "  pm.expect(json.data.accessToken).to.be.a('string').and.not.empty;",
+              "  pm.expect(json.data.refreshToken).to.be.a('string').and.not.empty;",
+              "  pm.expect(json.data.user.email).to.eql(pm.collectionVariables.get('userEmail'));",
+              "});",
+              "",
+              "pm.test('Response does not expose password', function () {",
+              "  pm.expect(JSON.stringify(json.data.user)).to.not.include('password');",
+              "});",
+              "",
+              "pm.collectionVariables.set('accessToken', json.data.accessToken);",
+              "pm.collectionVariables.set('refreshToken', json.data.refreshToken);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{userEmail}}\",\n  \"otp\": \"{{otp}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/verify-otp",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "verify-otp"
+          ]
+        },
+        "description": "Verifies the OTP created by request 01 and persists the user."
+      },
+      "response": []
+    },
+    {
+      "name": "03 Login - Success",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const json = pm.response.json();",
+              "",
+              "pm.test('HTTP 200 OK', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Login returns tokens and user', function () {",
+              "  pm.expect(json.success).to.eql(true);",
+              "  pm.expect(json.statusCode).to.eql(200);",
+              "  pm.expect(json.data.accessToken).to.be.a('string').and.not.empty;",
+              "  pm.expect(json.data.refreshToken).to.be.a('string').and.not.empty;",
+              "  pm.expect(json.data.user.email).to.eql(pm.collectionVariables.get('userEmail'));",
+              "});",
+              "",
+              "pm.collectionVariables.set('accessToken', json.data.accessToken);",
+              "pm.collectionVariables.set('refreshToken', json.data.refreshToken);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{userEmail}}\",\n  \"password\": \"{{password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "login"
+          ]
+        },
+        "description": "Logs in the verified user from request 02."
+      },
+      "response": []
+    },
+    {
+      "name": "04 Register - Success For Verify Alias",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const stamp = `${Date.now()}${Math.floor(Math.random() * 1000)}`;",
+              "const phoneSuffix = String(Number(String(Date.now()).slice(-7)) + 7).padStart(7, '0').slice(-7);",
+              "pm.collectionVariables.set('aliasEmail', `auth.alias.${stamp}@example.com`);",
+              "pm.collectionVariables.set('aliasPhone', `038${phoneSuffix}`);",
+              "pm.collectionVariables.unset('aliasOtp');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const json = pm.response.json();",
+              "",
+              "pm.test('HTTP 201 Created', function () {",
+              "  pm.response.to.have.status(201);",
+              "});",
+              "",
+              "pm.test('Alias OTP returned and saved', function () {",
+              "  pm.expect(json.success).to.eql(true);",
+              "  pm.expect(json.data).to.match(/^\\d{6}$/);",
+              "  pm.collectionVariables.set('aliasOtp', json.data);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"phone\": \"{{aliasPhone}}\",\n  \"email\": \"{{aliasEmail}}\",\n  \"full_name\": \"{{fullName}} Alias\",\n  \"password\": \"{{password}}\",\n  \"role\": \"{{role}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/register",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "register"
+          ]
+        },
+        "description": "Creates a second pending user to test the /verify-register alias. Uses the full_name JSON alias."
+      },
+      "response": []
+    },
+    {
+      "name": "05 Verify Register Alias - Success",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const json = pm.response.json();",
+              "",
+              "pm.test('HTTP 201 Created', function () {",
+              "  pm.response.to.have.status(201);",
+              "});",
+              "",
+              "pm.test('/verify-register alias verifies and returns tokens', function () {",
+              "  pm.expect(json.success).to.eql(true);",
+              "  pm.expect(json.statusCode).to.eql(201);",
+              "  pm.expect(json.data.accessToken).to.be.a('string').and.not.empty;",
+              "  pm.expect(json.data.refreshToken).to.be.a('string').and.not.empty;",
+              "  pm.expect(json.data.user.email).to.eql(pm.collectionVariables.get('aliasEmail'));",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{aliasEmail}}\",\n  \"otpCode\": \"{{aliasOtp}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/verify-register",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "verify-register"
+          ]
+        },
+        "description": "Covers the second @PostMapping alias and the otpCode JSON alias."
+      },
+      "response": []
+    },
+    {
+      "name": "06 Login - Invalid Password",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const json = pm.response.json();",
+              "",
+              "pm.test('HTTP 401 Unauthorized', function () {",
+              "  pm.response.to.have.status(401);",
+              "});",
+              "",
+              "pm.test('Invalid credentials error shape', function () {",
+              "  pm.expect(json.errorCode).to.eql('INVALID_CREDENTIALS');",
+              "  pm.expect(json.status).to.eql(401);",
+              "  pm.expect(json.message).to.include('Email or password is incorrect');",
+              "  pm.expect(json.timestamp).to.be.a('string').and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{userEmail}}\",\n  \"password\": \"WrongPassword123\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "login"
+          ]
+        },
+        "description": "Checks AuthExceptionHandler for InvalidCredentialsException."
+      },
+      "response": []
+    },
+    {
+      "name": "07 Register - Duplicate Email",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const phoneSuffix = String(Number(String(Date.now()).slice(-7)) + 17).padStart(7, '0').slice(-7);",
+              "pm.collectionVariables.set('duplicateEmailPhone', `037${phoneSuffix}`);"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const json = pm.response.json();",
+              "",
+              "pm.test('HTTP 401 Unauthorized', function () {",
+              "  pm.response.to.have.status(401);",
+              "});",
+              "",
+              "pm.test('Duplicate email error shape', function () {",
+              "  pm.expect(json.errorCode).to.eql('AUTH_ERROR');",
+              "  pm.expect(json.status).to.eql(401);",
+              "  pm.expect(json.message).to.include('Email already exists');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"phone\": \"{{duplicateEmailPhone}}\",\n  \"email\": \"{{userEmail}}\",\n  \"fullName\": \"{{fullName}} Duplicate Email\",\n  \"password\": \"{{password}}\",\n  \"role\": \"{{role}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/register",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "register"
+          ]
+        },
+        "description": "Attempts to register the already verified email from request 02."
+      },
+      "response": []
+    },
+    {
+      "name": "08 Register - Duplicate Phone",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const stamp = `${Date.now()}${Math.floor(Math.random() * 1000)}`;",
+              "pm.collectionVariables.set('duplicatePhoneEmail', `auth.duplicate.phone.${stamp}@example.com`);"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const json = pm.response.json();",
+              "",
+              "pm.test('HTTP 401 Unauthorized', function () {",
+              "  pm.response.to.have.status(401);",
+              "});",
+              "",
+              "pm.test('Duplicate phone error shape', function () {",
+              "  pm.expect(json.errorCode).to.eql('AUTH_ERROR');",
+              "  pm.expect(json.status).to.eql(401);",
+              "  pm.expect(json.message).to.include('Phone number already exists');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"phone\": \"{{userPhone}}\",\n  \"email\": \"{{duplicatePhoneEmail}}\",\n  \"fullName\": \"{{fullName}} Duplicate Phone\",\n  \"password\": \"{{password}}\",\n  \"role\": \"{{role}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/register",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "register"
+          ]
+        },
+        "description": "Attempts to register a new email with the already verified phone from request 02."
+      },
+      "response": []
+    },
+    {
+      "name": "09 Register - Role Not Found",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const stamp = `${Date.now()}${Math.floor(Math.random() * 1000)}`;",
+              "const phoneSuffix = String(Number(String(Date.now()).slice(-7)) + 29).padStart(7, '0').slice(-7);",
+              "pm.collectionVariables.set('badRoleEmail', `auth.bad.role.${stamp}@example.com`);",
+              "pm.collectionVariables.set('badRolePhone', `036${phoneSuffix}`);"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const json = pm.response.json();",
+              "",
+              "pm.test('HTTP 401 Unauthorized', function () {",
+              "  pm.response.to.have.status(401);",
+              "});",
+              "",
+              "pm.test('Role not found error shape', function () {",
+              "  pm.expect(json.errorCode).to.eql('AUTH_ERROR');",
+              "  pm.expect(json.status).to.eql(401);",
+              "  pm.expect(json.message).to.include('Role not found');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"phone\": \"{{badRolePhone}}\",\n  \"email\": \"{{badRoleEmail}}\",\n  \"fullName\": \"{{fullName}} Bad Role\",\n  \"password\": \"{{password}}\",\n  \"role\": \"UNKNOWN_ROLE\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/register",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "register"
+          ]
+        },
+        "description": "Checks register behavior when the role does not exist in RoleRepo."
+      },
+      "response": []
+    },
+    {
+      "name": "10 Verify OTP - Invalid OTP",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const json = pm.response.json();",
+              "",
+              "pm.test('HTTP 401 Unauthorized', function () {",
+              "  pm.response.to.have.status(401);",
+              "});",
+              "",
+              "pm.test('Invalid OTP error shape', function () {",
+              "  pm.expect(json.errorCode).to.eql('AUTH_ERROR');",
+              "  pm.expect(json.status).to.eql(401);",
+              "  pm.expect(json.message).to.include('Invalid OTP or OTP has expired');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{userEmail}}\",\n  \"otp\": \"000000\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/verify-otp",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "verify-otp"
+          ]
+        },
+        "description": "Uses a consumed/invalid OTP after request 02."
+      },
+      "response": []
+    },
+    {
+      "name": "11 Register - Validation Invalid Payload",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "let json = {};",
+              "try { json = pm.response.json(); } catch (e) {}",
+              "",
+              "pm.test('Validation request does not succeed', function () {",
+              "  pm.expect([200, 400, 500]).to.include(pm.response.code);",
+              "});",
+              "",
+              "pm.test('Validation response indicates failure', function () {",
+              "  if (Object.prototype.hasOwnProperty.call(json, 'success')) {",
+              "    pm.expect(json.success).to.eql(false);",
+              "  } else if (Object.prototype.hasOwnProperty.call(json, 'status')) {",
+              "    pm.expect([400, 500]).to.include(json.status);",
+              "  } else {",
+              "    pm.expect(pm.response.text()).to.not.be.empty;",
+              "  }",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"phone\": \"123\",\n  \"email\": \"not-an-email\",\n  \"fullName\": \"ab\",\n  \"password\": \"123\",\n  \"role\": \"\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/register",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "register"
+          ]
+        },
+        "description": "Covers @Valid constraints in RegisterRequest. The current GlobalExceptionHandler may return HTTP 200 with body.statusCode 500; this test accepts current and improved validation statuses."
+      },
+      "response": []
+    },
+    {
+      "name": "12 Login - Validation Missing Password",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "let json = {};",
+              "try { json = pm.response.json(); } catch (e) {}",
+              "",
+              "pm.test('Validation request does not succeed', function () {",
+              "  pm.expect([200, 400, 500]).to.include(pm.response.code);",
+              "});",
+              "",
+              "pm.test('Validation response indicates failure', function () {",
+              "  if (Object.prototype.hasOwnProperty.call(json, 'success')) {",
+              "    pm.expect(json.success).to.eql(false);",
+              "  } else if (Object.prototype.hasOwnProperty.call(json, 'status')) {",
+              "    pm.expect([400, 500]).to.include(json.status);",
+              "  } else {",
+              "    pm.expect(pm.response.text()).to.not.be.empty;",
+              "  }",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{userEmail}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "login"
+          ]
+        },
+        "description": "Covers LoginRequest password validation."
+      },
+      "response": []
+    },
+    {
+      "name": "13 Verify OTP - Validation Short OTP",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "let json = {};",
+              "try { json = pm.response.json(); } catch (e) {}",
+              "",
+              "pm.test('Validation request does not succeed', function () {",
+              "  pm.expect([200, 400, 500]).to.include(pm.response.code);",
+              "});",
+              "",
+              "pm.test('Validation response indicates failure', function () {",
+              "  if (Object.prototype.hasOwnProperty.call(json, 'success')) {",
+              "    pm.expect(json.success).to.eql(false);",
+              "  } else if (Object.prototype.hasOwnProperty.call(json, 'status')) {",
+              "    pm.expect([400, 500]).to.include(json.status);",
+              "  } else {",
+              "    pm.expect(pm.response.text()).to.not.be.empty;",
+              "  }",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{userEmail}}\",\n  \"otp\": \"123\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/verify-otp",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "verify-otp"
+          ]
+        },
+        "description": "Covers VerifyOtpRequest OTP length validation."
+      },
+      "response": []
+    },
+    {
+      "name": "14 Login - Phone Only Current Behavior",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "let json = {};",
+              "try { json = pm.response.json(); } catch (e) {}",
+              "",
+              "pm.test('Phone-only login is handled without server error', function () {",
+              "  pm.expect(pm.response.code).to.not.eql(500);",
+              "});",
+              "",
+              "pm.test('Phone-only login either succeeds or returns invalid credentials', function () {",
+              "  pm.expect([200, 401]).to.include(pm.response.code);",
+              "  if (pm.response.code === 200) {",
+              "    pm.expect(json.success).to.eql(true);",
+              "    pm.expect(json.data.accessToken).to.be.a('string').and.not.empty;",
+              "  } else {",
+              "    pm.expect(json.errorCode).to.eql('INVALID_CREDENTIALS');",
+              "  }",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"phone\": \"{{userPhone}}\",\n  \"password\": \"{{password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "login"
+          ]
+        },
+        "description": "LoginRequest accepts email or phone, but AuthService currently authenticates by email. This request documents the current behavior and will still pass if phone login is implemented later."
+      },
+      "response": []
+    }
+  ],
+  "auth": {
+    "type": "noauth"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8081"
+    },
+    {
+      "key": "fullName",
+      "value": "Postman Auth Tester"
+    },
+    {
+      "key": "password",
+      "value": "Password123"
+    },
+    {
+      "key": "role",
+      "value": "USER"
+    },
+    {
+      "key": "userEmail",
+      "value": ""
+    },
+    {
+      "key": "userPhone",
+      "value": ""
+    },
+    {
+      "key": "otp",
+      "value": ""
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "refreshToken",
+      "value": ""
+    },
+    {
+      "key": "aliasEmail",
+      "value": ""
+    },
+    {
+      "key": "aliasPhone",
+      "value": ""
+    },
+    {
+      "key": "aliasOtp",
+      "value": ""
+    }
+  ]
+}
